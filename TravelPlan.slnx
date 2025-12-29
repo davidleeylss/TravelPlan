@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="travelplan.client/travelplan.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="TravelPlan.Server/TravelPlan.Server.csproj" />
+</Solution>
