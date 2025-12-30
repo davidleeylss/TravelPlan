@@ -5,6 +5,7 @@ namespace TravelPlan.Server.Models
     public class ItineraryItem
     {
         public int Id { get; set; }
+        public string Participants { get; set; } = string.Empty;
 
         [Required] // 必填
         public DateTime Date { get; set; } // 日期 (2025-04-10)

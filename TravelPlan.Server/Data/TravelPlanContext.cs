@@ -12,5 +12,7 @@ namespace TravelPlan.Server.Data
 
         public DbSet<ItineraryItem> ItineraryItems { get; set; }
         public DbSet<Expense> Expenses { get; set; }
+
+        public DbSet<Flight> Flights { get; set; }
     }
 }

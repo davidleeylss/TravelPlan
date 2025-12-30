@@ -16,28 +16,30 @@ namespace TravelPlan.Server.Controllers
             _context = context;
         }
 
-        // 1. 取得指定日期的行程
-        // GET: api/itinerary?date=2025-04-10
+        // 取得某天的行程
+        // GET: api/itinerary?date=2025-04-10&user=UserA
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ItineraryItem>>> GetItineraries(DateTime date)
+        public async Task<ActionResult<IEnumerable<ItineraryItem>>> GetItineraries(DateTime date, string user)
         {
+            // 檢查 Participants 是否包含 user
             var items = await _context.ItineraryItems
                                       .Where(i => i.Date.Date == date.Date)
+                                      .Where(i => i.Participants.Contains(user)) // 只傳回有參加的行程
                                       .OrderBy(i => i.Time)
                                       .ToListAsync();
 
-            // 模擬天氣資訊 (之後可以換成真的 API)
+            // 模擬天氣資訊
             var rng = new Random();
             foreach (var item in items)
             {
-                item.Temperature = rng.Next(15, 25).ToString(); // 隨機產生 15~25度
-                item.WeatherIcon = "fa-solid fa-cloud-sun";     // 預設圖示
+                item.Temperature = rng.Next(15, 25).ToString();
+                item.WeatherIcon = "fa-solid fa-cloud-sun";
             }
 
             return items;
         }
 
-        // 2. 新增行程
+        // 新增行程
         // POST: api/itinerary
         [HttpPost]
         public async Task<ActionResult<ItineraryItem>> PostItinerary(ItineraryItem item)
@@ -45,7 +47,7 @@ namespace TravelPlan.Server.Controllers
             _context.ItineraryItems.Add(item);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetItineraries), new { date = item.Date }, item);
+            return Ok(item);
         }
 
         // 3. 刪除行程

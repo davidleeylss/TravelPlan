@@ -14,3 +14,15 @@ body {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+
+/* ÁôÂÃ Chrome, Safari, Edge ªº±²¶b */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* ÁôÂÃ Firefox ªº±²¶b */
+.scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
