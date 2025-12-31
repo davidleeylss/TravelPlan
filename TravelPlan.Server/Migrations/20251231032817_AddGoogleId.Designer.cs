@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TravelPlan.Server.Data;
 
@@ -11,9 +12,11 @@ using TravelPlan.Server.Data;
 namespace TravelPlan.Server.Migrations
 {
     [DbContext(typeof(TravelPlanContext))]
-    partial class TravelPlanContextModelSnapshot : ModelSnapshot
+    [Migration("20251231032817_AddGoogleId")]
+    partial class AddGoogleId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -41,12 +44,7 @@ namespace TravelPlan.Server.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("TripId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("TripId");
 
                     b.ToTable("Expenses");
                 });
@@ -90,16 +88,11 @@ namespace TravelPlan.Server.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("TripId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("TripId");
 
                     b.ToTable("Flights");
                 });
@@ -130,40 +123,9 @@ namespace TravelPlan.Server.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("TripId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("TripId");
 
                     b.ToTable("ItineraryItems");
-                });
-
-            modelBuilder.Entity("TravelPlan.Server.Models.Trip", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("EndDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("OwnerId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Trip");
                 });
 
             modelBuilder.Entity("TravelPlan.Server.Models.User", b =>
@@ -188,72 +150,6 @@ namespace TravelPlan.Server.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("TripUser", b =>
-                {
-                    b.Property<int>("ParticipantsId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("TripsId")
-                        .HasColumnType("int");
-
-                    b.HasKey("ParticipantsId", "TripsId");
-
-                    b.HasIndex("TripsId");
-
-                    b.ToTable("TripUser");
-                });
-
-            modelBuilder.Entity("TravelPlan.Server.Models.Expense", b =>
-                {
-                    b.HasOne("TravelPlan.Server.Models.Trip", null)
-                        .WithMany("Expenses")
-                        .HasForeignKey("TripId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TravelPlan.Server.Models.Flight", b =>
-                {
-                    b.HasOne("TravelPlan.Server.Models.Trip", null)
-                        .WithMany("Flights")
-                        .HasForeignKey("TripId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TravelPlan.Server.Models.ItineraryItem", b =>
-                {
-                    b.HasOne("TravelPlan.Server.Models.Trip", null)
-                        .WithMany("Itineraries")
-                        .HasForeignKey("TripId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TripUser", b =>
-                {
-                    b.HasOne("TravelPlan.Server.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("ParticipantsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TravelPlan.Server.Models.Trip", null)
-                        .WithMany()
-                        .HasForeignKey("TripsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TravelPlan.Server.Models.Trip", b =>
-                {
-                    b.Navigation("Expenses");
-
-                    b.Navigation("Flights");
-
-                    b.Navigation("Itineraries");
                 });
 #pragma warning restore 612, 618
         }

@@ -19,9 +19,12 @@ namespace TravelPlan.Server.Controllers
         // 1. 取得所有帳目
         // GET: api/expense
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Expense>>> GetExpenses()
+        public async Task<ActionResult<IEnumerable<Expense>>> GetExpenses([FromQuery] int tripId)
         {
-            return await _context.Expenses.ToListAsync();
+            return await _context.Expenses
+                        .Where(e => e.TripId == tripId) // 只抓這趟旅遊的帳
+                        .OrderByDescending(e => e.Id)   // 新的帳放上面
+                        .ToListAsync();
         }
 
         // 2. 新增帳目

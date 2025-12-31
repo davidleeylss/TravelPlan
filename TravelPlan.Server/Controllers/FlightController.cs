@@ -18,9 +18,10 @@ namespace TravelPlan.Server.Controllers
 
         // 取得某人的機票資訊：GET api/flight?user=UserA
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Flight>>> GetFlights(string user)
+        public async Task<ActionResult<IEnumerable<Flight>>> GetFlights([FromQuery] int tripId, [FromQuery] string user)
         {
             return await _context.Flights
+                        .Where(f => f.TripId == tripId)            // 鎖定旅遊 ID
                         .Where(f => f.Participants.Contains(user))
                         .ToListAsync();
         }

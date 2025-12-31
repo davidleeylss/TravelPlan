@@ -14,5 +14,8 @@ namespace TravelPlan.Server.Data
         public DbSet<Expense> Expenses { get; set; }
 
         public DbSet<Flight> Flights { get; set; }
+        public DbSet<User> Users { get; set; }
+
+        public DbSet<Trip> Trips { get; set; }
     }
 }

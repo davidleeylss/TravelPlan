@@ -14,5 +14,7 @@ namespace TravelPlan.Server.Models
 
         [Required]
         public string PayerName { get; set; } = string.Empty; // 付款人 (Me 或 Friend)
+
+        public int TripId { get; set; }
     }
 }

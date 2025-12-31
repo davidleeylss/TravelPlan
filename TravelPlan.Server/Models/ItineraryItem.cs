@@ -24,5 +24,7 @@ namespace TravelPlan.Server.Models
 
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]
         public string? WeatherIcon { get; set; }
+
+        public int TripId { get; set; }
     }
 }

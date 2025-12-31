@@ -19,15 +19,14 @@ namespace TravelPlan.Server.Controllers
         // 取得某天的行程
         // GET: api/itinerary?date=2025-04-10&user=UserA
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ItineraryItem>>> GetItineraries(DateTime date, string user)
+        public async Task<ActionResult<IEnumerable<ItineraryItem>>> GetItineraries([FromQuery] int tripId, [FromQuery] DateTime date, [FromQuery] string user)
         {
-            // 檢查 Participants 是否包含 user
             var items = await _context.ItineraryItems
-                                      .Where(i => i.Date.Date == date.Date)
-                                      .Where(i => i.Participants.Contains(user)) // 只傳回有參加的行程
-                                      .OrderBy(i => i.Time)
-                                      .ToListAsync();
-
+                              .Where(i => i.TripId == tripId)            // 鎖定旅遊ID
+                              .Where(i => i.Date.Date == date.Date)      // 鎖定日期
+                              .Where(i => i.Participants.Contains(user)) // 只傳回有參加的行程
+                              .OrderBy(i => i.Time)
+                              .ToListAsync();
             // 模擬天氣資訊
             var rng = new Random();
             foreach (var item in items)
@@ -50,7 +49,7 @@ namespace TravelPlan.Server.Controllers
             return Ok(item);
         }
 
-        // 3. 刪除行程
+        // 刪除行程
         // DELETE: api/itinerary/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteItinerary(int id)
@@ -67,7 +66,7 @@ namespace TravelPlan.Server.Controllers
             return NoContent();
         }
 
-        // 4. 修改行程
+        // 修改行程
         // PUT: api/itinerary/5
         [HttpPut("{id}")]
         public async Task<IActionResult> PutItinerary(int id, ItineraryItem item)
