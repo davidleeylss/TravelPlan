@@ -18,52 +18,57 @@ namespace TravelPlan.Server.Controllers
 
         // 取得某人的機票資訊：GET api/flight?user=UserA
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Flight>>> GetFlights([FromQuery] int tripId, [FromQuery] string user)
+        public async Task<ActionResult<IEnumerable<Flight>>> GetFlights([FromQuery] int tripId)
         {
+            // 只回傳該旅遊 ID (TripId) 的機票
             return await _context.Flights
-                        .Where(f => f.TripId == tripId)            // 鎖定旅遊 ID
-                        .Where(f => f.Participants.Contains(user))
-                        .ToListAsync();
+                .Where(f => f.TripId == tripId)
+                .ToListAsync();
         }
 
         // 更新或新增機票：POST api/flight
         [HttpPost]
-        public async Task<IActionResult> SaveFlight([FromBody] Flight flight)
+        public async Task<ActionResult<Flight>> CreateOrUpdateFlight(Flight request)
         {
-            if (flight.Id > 0)
+            if (request.TripId == 0) return BadRequest("TripId cannot be 0");
+
+            // 情況 1: 更新現有機票 (依靠 Id)
+            if (request.Id != 0)
             {
-                // --- 更新現有資料 (Update) ---
+                var existingFlight = await _context.Flights.FindAsync(request.Id);
+                if (existingFlight == null) return NotFound("找不到該機票");
 
-                // 先去資料庫把舊資料抓出來
-                var existing = await _context.Flights.FindAsync(flight.Id);
+                // 更新欄位
+                existingFlight.Date = request.Date;
+                existingFlight.Airline = request.Airline;
+                existingFlight.Departure = request.Departure;
+                existingFlight.Arrival = request.Arrival;
+                existingFlight.DepartureTime = request.DepartureTime;
+                existingFlight.ArrivalTime = request.ArrivalTime;
+                existingFlight.Number = request.Number;
 
-                if (existing != null)
-                {
-                    // 更新所有欄位
-                    // 記得更新 Participants (參加者)
-                    existing.Participants = flight.Participants;
-
-                    existing.Date = flight.Date;
-                    existing.DepartureTime = flight.DepartureTime;
-                    existing.ArrivalTime = flight.ArrivalTime;
-                    existing.Departure = flight.Departure;
-                    existing.Arrival = flight.Arrival;
-                    existing.Airline = flight.Airline;
-                    existing.Number = flight.Number;
-                }
-                else
-                {
-                    return NotFound("找不到該筆機票資料");
-                }
+                await _context.SaveChangesAsync();
+                return Ok(existingFlight);
             }
+            // 情況 2: 新增一段航程 (Id 為 0)
             else
             {
-                // --- 新增全新資料 (Insert) ---
-                _context.Flights.Add(flight);
+                _context.Flights.Add(request);
+                await _context.SaveChangesAsync();
+                return Ok(request);
             }
+        }
 
+        // 刪除單張機票 (用於移除轉機行程)
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteFlight(int id)
+        {
+            var flight = await _context.Flights.FindAsync(id);
+            if (flight == null) return NotFound();
+
+            _context.Flights.Remove(flight);
             await _context.SaveChangesAsync();
-            return Ok();
+            return NoContent();
         }
     }
 }

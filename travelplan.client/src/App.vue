@@ -82,6 +82,7 @@
 
         // 抓資料
         fetchMyTrips(data.id);
+        fetchAllMembers();
     };
 
     
@@ -110,6 +111,7 @@
                 currentUserId.value = parseInt(savedId);
                 // 抓登入人員的旅遊列表
                 fetchMyTrips(currentUserId.value);
+                fetchAllMembers();
             }
         }
     });
@@ -124,7 +126,66 @@
             console.error(err);
         }
     };
+    // 用來判斷現在 Trip Modal 是「建立模式」還是「編輯模式」
+    const isEditingTrip = ref(false);
+    const editingTripId = ref(0);
 
+    // --- 開啟建立視窗 ---
+    const openCreateTripModal = () => {
+        isEditingTrip.value = false; // 設定為建立模式
+        newTripForm.value = { title: '', startDate: '', endDate: '', participants: [] }; // 清空表單
+        // 預設把自己加入參加者 (顯示在 UI 上比較直覺)
+        if (currentUser.value && !newTripForm.value.participants.includes(currentUser.value)) {
+            newTripForm.value.participants.push(currentUser.value);
+        }
+        showCreateTripModal.value = true;
+    };
+
+    // --- 開啟編輯視窗 (點擊筆的圖示觸發) ---
+    const openEditTripModal = (trip, event) => {
+        event.stopPropagation(); // 阻止冒泡 (避免點編輯時誤觸進入旅遊)
+
+        isEditingTrip.value = true; // 設定為編輯模式
+        editingTripId.value = trip.id;
+
+        // 把舊資料填入表單
+        newTripForm.value = {
+            title: trip.title,
+            startDate: trip.startDate.split('T')[0], // 格式化日期
+            endDate: trip.endDate.split('T')[0],
+            // 把物件陣列轉成純文字陣列 (User object -> Username string)
+            participants: trip.travelGroup?.members.map(m => m.username) || []
+        };
+
+        showCreateTripModal.value = true;
+    };
+
+    // --- 提交表單 (判斷是新增還是更新) ---
+    const submitTripForm = async () => {
+        try {
+            const payload = {
+                ...newTripForm.value,
+                ownerId: currentUserId.value,
+            };
+
+            if (isEditingTrip.value) {
+                // --- 編輯模式 ---
+                await axios.put(`/api/trip/${editingTripId.value}`, payload);
+                alert("更新成功！");
+            } else {
+                // --- 建立模式 ---
+                await axios.post('/api/trip', payload);
+                alert("建立成功！");
+            }
+
+            showCreateTripModal.value = false;
+            fetchMyTrips(currentUserId.value); // 重整列表
+
+        } catch (err) {
+            console.error(err);
+            alert("操作失敗: " + (err.response?.data || err.message));
+        }
+    };
 
     // --- 抓取旅遊列表 ---
     const fetchMyTrips = async (userId) => {
@@ -136,24 +197,26 @@
         }
     };
 
-    // --- 建立旅遊 ---
-    const createTrip = async () => {
+    // --- 刪除旅遊 (或退出) ---
+    const deleteTrip = async (trip, event) => {
+        event.stopPropagation(); // 阻止冒泡
+
+        const isOwner = trip.ownerId === currentUserId.value;
+        const msg = isOwner
+            ? `確定要刪除「${trip.title}」嗎？所有資料都會消失喔！`
+            : `確定要退出「${trip.title}」嗎？`;
+
+        if (!confirm(msg)) return;
+
         try {
-            const payload = {
-                ...newTripForm.value,
-                ownerId: currentUserId.value, 
-                participantNames: newTripForm.value.participants
-            };
+            // 傳入 userId 讓後端判斷是刪除還是退出
+            await axios.delete(`/api/trip/${trip.id}?userId=${currentUserId.value}`);
 
-            await axios.post('/api/trip', payload);
-
-            showCreateTripModal.value = false;
-            // 重新整理列表
-            fetchMyTrips(currentUserId.value);
-
+            alert(isOwner ? "已刪除" : "已退出");
+            fetchMyTrips(currentUserId.value); // 重整列表
         } catch (err) {
             console.error(err);
-            alert("建立失敗");
+            alert("刪除失敗");
         }
     };
 
@@ -203,69 +266,101 @@
 
     // 機票資料 (改回預設空值，等待 API 填入)
     const flightInfo = reactive({
-        outbound: {
-            id: 0,
-            type: 'Outbound', // 標記類型
-            participants: '',
-            date: '',
-            departureTime: '',
-            arrivalTime: '',
-            departure: '',
-            arrival: '',
-            airline: '',
-            number: '',
-        },
-        inbound: {
-            id: 0,
-            type: 'Inbound', // 標記類型
-            participants: '',
-            date: '',
-            departureTime: '',
-            arrivalTime: '',
-            departure: '',
-            arrival: '',
-            airline: '',
-            number: '',
-        }
+        outbound: [], // 去程清單
+        inbound: []   // 回程清單
+    });
+
+    // 產生一張空白機票
+    const createEmptyFlight = (type) => ({
+        id: 0,
+        type: type, // 'Outbound' 或 'Inbound'
+        tripId: currentTripId.value,
+        participants: currentUser.value, // 預設參加者是自己
+        date: '',
+        departureTime: '',
+        arrivalTime: '',
+        departure: '',
+        arrival: '',
+        airline: '',
+        number: ''
     });
 
     // API: 讀取機票
-    const fetchFlights = async () => {
+    const fetchFlights = async (tripId) => {
+        if (!tripId) return;
         try {
-            const res = await axios.get(`/api/flight?user=${currentUser.value}`);
-            const data = res.data;
+            const res = await axios.get(`/api/flight?tripId=${tripId}`);
+            const data = res.data; // 這是陣列
 
-            // 如果資料庫有資料，就填入 flightInfo
-            const outboundData = data.find(f => f.type === 'Outbound');
-            if (outboundData) Object.assign(flightInfo.outbound, outboundData);
+            // 過濾並排序 (依照時間早晚排序，轉機順序才對)
+            const sortByTime = (a, b) => (a.date + a.departureTime).localeCompare(b.date + b.departureTime);
 
-            const inboundData = data.find(f => f.type === 'Inbound');
-            if (inboundData) Object.assign(flightInfo.inbound, inboundData);
+            flightInfo.outbound = data.filter(f => f.type === 'Outbound').sort(sortByTime);
+            flightInfo.inbound = data.filter(f => f.type === 'Inbound').sort(sortByTime);
+
+            // 如果完全沒資料，預設各給一張空白的
+            if (flightInfo.outbound.length === 0) addSegment('Outbound');
+            if (flightInfo.inbound.length === 0) addSegment('Inbound');
 
         } catch (err) {
             console.error("讀取機票失敗", err);
         }
     };
 
+    // 加入一段轉機
+    const addSegment = (type) => {
+        if (type === 'Outbound') flightInfo.outbound.push(createEmptyFlight('Outbound'));
+        else flightInfo.inbound.push(createEmptyFlight('Inbound'));
+    };
+    // 移除一段機票
+    const removeSegment = async (flight, list, index) => {
+        if (!confirm("確定要移除這段航班嗎?")) return;
+
+        // 如果這張票已經存在資料庫 (有 ID)，要呼叫 API 刪除
+        if (flight.id !== 0) {
+            try {
+                await axios.delete(`/api/flight/${flight.id}`);
+            } catch (err) {
+                alert("刪除失敗");
+                return;
+            }
+        }
+        // 從前端陣列移除
+        list.splice(index, 1);
+    };
+
+
+    // 重置機票欄位，避免切換旅遊時資料混亂
+    const resetFlightInfo = () => {
+        const defaultFlight = {
+            id: 0, participants: '', date: '', departureTime: '', arrivalTime: '',
+            departure: '', arrival: '', airline: '', number: ''
+        };
+        flightInfo.outbound = { ...defaultFlight, type: 'Outbound' };
+        flightInfo.inbound = { ...defaultFlight, type: 'Inbound' };
+    };
+
     // API: 儲存機票 (修改 toggleEdit 函式)
     const toggleEdit = async () => {
         if (isEditingFlight.value) {
-            // 如果原本是「編輯中」，現在按下「完成」，則觸發儲存
             try {
-                // 處理去程
-                await axios.post('/api/flight', {
-                    ...flightInfo.outbound,
-                    participants: flightInfo.outbound.participants || currentUser.value
-                });
+                // 把所有去程跟回程合併成一個大陣列，一次跑迴圈儲存
+                const allFlights = [...flightInfo.outbound, ...flightInfo.inbound];
 
-                // 處理回程
-                await axios.post('/api/flight', {
-                    ...flightInfo.inbound,
-                    participants: flightInfo.inbound.participants || currentUser.value
-                });
+                for (const flight of allFlights) {
+                    // 只要有填寫其中一項重要資訊 (包含航班編號)，就視為有效機票
+                    if (flight.airline || flight.departure || flight.arrival || flight.number) {
+
+                        await axios.post('/api/flight', {
+                            ...flight, 
+                            tripId: currentTripId.value, 
+                            participants: flight.participants || currentUser.value
+                        });
+                    }
+                }
 
                 alert('機票資訊已儲存！');
-                fetchFlights(); // 存完重抓一次，確保 Id 更新
+                fetchFlights(currentTripId.value); // 重抓以更新 ID
             } catch (err) {
                 console.error("儲存失敗", err);
                 alert("儲存失敗");
@@ -542,22 +637,30 @@
         <div v-else class="w-full flex justify-center">
 
             <div v-if="!currentTripId" class="w-full max-w-4xl px-4 animate-fade-in">
-                <div class="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl">
+                <div class="flex justify-between items-center mb-6 md:mb-8 bg-white p-3 md:p-4 rounded-2xl shadow-sm">
+
+                    <div class="flex items-center gap-2 md:gap-3 overflow-hidden">
+                        <div class="w-8 h-8 md:w-10 md:h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-sm md:text-xl flex-shrink-0">
                             {{ currentUser[0]?.toUpperCase() }}
                         </div>
-                        <div>
-                            <div class="text-xs text-gray-400">Welcome back</div>
-                            <div class="font-bold text-gray-700">{{ currentUser }}</div>
+                        <div class="min-w-0">
+                            <div class="text-[10px] md:text-xs text-gray-400 truncate">Welcome</div>
+                            <div class="font-bold text-sm md:text-base text-gray-700 truncate max-w-[100px] md:max-w-none">
+                                {{ currentUser }}
+                            </div>
                         </div>
                     </div>
-                    <div class="flex gap-3">
-                        <button @click="logout" class="px-4 py-2 text-red-400 hover:bg-red-50 rounded-xl transition font-bold text-sm">
-                            <i class="fa-solid fa-right-from-bracket"></i> 登出
+
+                    <div class="flex gap-2 md:gap-3 flex-shrink-0">
+                        <button @click="logout" class="w-8 h-8 md:w-auto md:px-4 md:py-2 text-red-400 hover:bg-red-50 rounded-xl transition font-bold text-sm flex items-center justify-center border border-gray-100 md:border-none">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <span class="hidden md:inline ml-1">登出</span>
                         </button>
-                        <button @click="showCreateTripModal=true" class="bg-primary text-white px-5 py-2 rounded-xl shadow-lg shadow-primary/30 hover:bg-lake-dark transition font-bold">
-                            <i class="fa-solid fa-plus mr-1"></i> 新增旅遊
+
+                        <button @click="openCreateTripModal" class="px-3 py-2 md:px-4 bg-primary text-white rounded-xl shadow-sm hover:bg-lake-dark transition font-bold text-xs md:text-sm flex items-center whitespace-nowrap">
+                            <i class="fa-solid fa-plus mr-1"></i>
+                            <span>新增</span>
+                            <span class="hidden md:inline">旅遊</span>
                         </button>
                     </div>
                 </div>
@@ -567,28 +670,51 @@
                 <div v-if="myTrips.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div v-for="trip in myTrips" :key="trip.id"
                          @click="selectTrip(trip)"
-                         class="bg-white p-6 rounded-3xl shadow-sm hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 border-2 border-transparent hover:border-primary group relative overflow-hidden">
-
-                        <div class="absolute -right-4 -top-4 w-24 h-24 bg-blue-50 rounded-full group-hover:scale-150 transition duration-500"></div>
+                         class="bg-white p-4 md:p-6 rounded-3xl shadow-sm hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 border-2 border-transparent hover:border-primary group relative overflow-hidden">
 
                         <div class="relative z-10">
-                            <h3 class="text-xl font-bold mb-1 text-gray-800">{{ trip.title }}</h3>
-                            <div class="text-gray-400 text-sm mb-4 font-medium">
-                                <i class="fa-regular fa-calendar mr-2"></i>
-                                {{ formatDateOnly(trip.startDate) }} ~ {{ formatDateOnly(trip.endDate) }}
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="text-lg md:text-xl font-bold text-gray-800 line-clamp-1 break-all">
+                                    {{ trip.title }}
+                                </h3>
+
+                                <div class="flex gap-1 md:gap-2 flex-shrink-0 ml-2">
+                                    <button v-if="trip.ownerId === currentUserId"
+                                            @click="openEditTripModal(trip, $event)"
+                                            class="p-2 text-gray-400 hover:text-blue-500 transition rounded-full hover:bg-blue-50">
+                                        <i class="fa-solid fa-pen text-sm md:text-base"></i>
+                                    </button>
+
+                                    <button @click="deleteTrip(trip, $event)"
+                                            class="p-2 text-gray-400 hover:text-red-500 transition rounded-full hover:bg-red-50">
+                                        <i class="fa-solid fa-trash text-sm md:text-base"></i>
+                                    </button>
+                                </div>
                             </div>
 
-                            <div class="flex justify-between items-end mt-4">
-                                <div class="flex -space-x-2">
-                                    <div v-for="(p, idx) in trip.participants" :key="idx"
-                                         class="w-8 h-8 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-xs font-bold text-gray-500 shadow-sm"
-                                         :title="p.username">
-                                        {{ p.username[0]?.toUpperCase() }}
+                            <div class="text-gray-400 text-xs md:text-sm mb-4 font-medium flex items-center">
+                                <i class="fa-regular fa-calendar mr-2"></i>
+                                <span class="truncate">{{ formatDateOnly(trip.startDate) }} ~ {{ formatDateOnly(trip.endDate) }}</span>
+                            </div>
+
+                            <div class="flex justify-between items-end mt-2 md:mt-4">
+                                <div class="flex -space-x-2 overflow-hidden">
+                                    <div v-for="(p, idx) in (trip.travelGroup?.members || []).slice(0, 5)" :key="idx"
+                                         class="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-[10px] md:text-xs font-bold text-gray-500 shadow-sm">
+                                        {{ p.username ? p.username[0]?.toUpperCase() : '?' }}
+                                    </div>
+
+                                    <div v-if="(trip.travelGroup?.members || []).length > 5" class="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gray-50 border-2 border-white flex items-center justify-center text-[10px] text-gray-400">
+                                        +{{ (trip.travelGroup?.members || []).length - 5 }}
                                     </div>
                                 </div>
-                                <span class="text-primary font-bold text-sm group-hover:translate-x-1 transition">GO <i class="fa-solid fa-arrow-right"></i></span>
+                                <span class="text-primary font-bold text-xs md:text-sm group-hover:translate-x-1 transition whitespace-nowrap">
+                                    GO <i class="fa-solid fa-arrow-right"></i>
+                                </span>
                             </div>
                         </div>
+
+                        <div class="absolute -right-4 -top-4 w-20 h-20 md:w-24 md:h-24 bg-blue-50 rounded-full group-hover:scale-150 transition duration-500"></div>
                     </div>
                 </div>
 
@@ -623,56 +749,7 @@
                         </div>
                     </div>
 
-                    <div class="px-4 mb-4">
-                        <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
-                            <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
-                                <h3 class="font-bold text-gray-700 flex items-center gap-2">
-                                    ✈️ 機票資訊
-                                </h3>
-                                <button @click="toggleEdit" class="text-sm text-primary font-medium hover:text-blue-600 transition">
-                                    {{ isEditingFlight ? '完成' : '編輯' }}
-                                </button>
-                            </div>
-
-                            <div v-if="isEditingFlight" class="space-y-4">
-                                <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                    <div class="text-xs text-primary font-bold mb-2">去程 (Outbound)</div>
-                                    <input v-model="flightInfo.outbound.departureTime" type="time" class="border rounded p-1 text-sm mb-2">
-                                    <div class="text-xs text-gray-400 text-center">(請填寫完整機票欄位)</div>
-                                </div>
-                            </div>
-                            <div v-else class="space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex flex-col">
-                                        <span class="text-xs text-gray-400">{{ flightInfo.outbound.departure || 'TPE' }}</span>
-                                        <span class="font-bold text-lg text-gray-800">{{ flightInfo.outbound.departureTime || '--:--' }}</span>
-                                    </div>
-                                    <div class="flex flex-col items-center px-2">
-                                        <i class="fa-solid fa-plane text-gray-300 text-xs"></i>
-                                        <span class="text-[10px] text-gray-400 mt-1">{{ flightInfo.outbound.airline }}</span>
-                                    </div>
-                                    <div class="flex flex-col items-end">
-                                        <span class="text-xs text-gray-400">{{ flightInfo.outbound.arrival || 'DEST' }}</span>
-                                        <span class="font-bold text-lg text-gray-800">{{ flightInfo.outbound.arrivalTime || '--:--' }}</span>
-                                    </div>
-                                </div>
-                                <div class="border-t border-dashed border-gray-200 my-2"></div>
-                                <div class="flex items-center justify-between">
-                                    <div class="flex flex-col">
-                                        <span class="text-xs text-gray-400">{{ flightInfo.inbound.departure || 'DEST' }}</span>
-                                        <span class="font-bold text-lg text-gray-800">{{ flightInfo.inbound.departureTime || '--:--' }}</span>
-                                    </div>
-                                    <div class="flex flex-col items-center px-2">
-                                        <i class="fa-solid fa-plane text-gray-300 text-xs"></i>
-                                    </div>
-                                    <div class="flex flex-col items-end">
-                                        <span class="text-xs text-gray-400">{{ flightInfo.inbound.arrival || 'TPE' }}</span>
-                                        <span class="font-bold text-lg text-gray-800">{{ flightInfo.inbound.arrivalTime || '--:--' }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    
 
                     <div class="flex overflow-x-auto gap-3 px-4 py-2 scrollbar-hide">
                         <div v-for="day in dates" :key="day" @click="currentDate = day"
@@ -685,6 +762,183 @@
                 </header>
 
                 <main class="flex-1 overflow-y-auto hide-scrollbar p-5 pb-24">
+                    <div class="px-4 mb-4">
+                        <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
+                            <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                                <h3 class="font-bold text-gray-700 flex items-center gap-2">
+                                    ✈️ 機票資訊
+                                </h3>
+                                <button @click="toggleEdit" class="text-sm text-primary font-medium hover:text-blue-600 transition">
+                                    {{ isEditingFlight ? '完成' : '編輯' }}
+                                </button>
+                            </div>
+
+                            <div v-if="isEditingFlight" class="space-y-6 animate-fade-in">
+
+                                <div class="bg-gray-50 p-4 rounded-xl border border-blue-100">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <span class="bg-blue-100 text-primary text-xs font-bold px-2 py-1 rounded">去程 (Outbound)</span>
+                                        <button @click="addSegment('Outbound')" class="text-xs flex items-center gap-1 text-blue-500 hover:text-blue-700 font-bold">
+                                            <i class="fa-solid fa-plus"></i> 加入轉機
+                                        </button>
+                                    </div>
+
+                                    <div v-for="(flight, index) in flightInfo.outbound" :key="index" class="relative mb-6 pb-6 border-b border-dashed border-gray-300 last:border-0 last:mb-0 last:pb-0">
+
+                                        <button v-if="flightInfo.outbound.length > 1" @click="removeSegment(flight, flightInfo.outbound, index)" class="absolute -right-2 -top-2 text-gray-300 hover:text-red-400">
+                                            <i class="fa-solid fa-circle-minus"></i>
+                                        </button>
+
+                                        <div class="grid grid-cols-2 gap-3 mb-3">
+                                            <div class="mb-3">
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">日期</label>
+                                                <input v-model="flight.date" type="datetime-local" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-primary outline-none">
+                                            </div>
+
+                                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                                <div>
+                                                    <label class="text-[10px] font-bold text-gray-400 ml-1">航空公司</label>
+                                                    <input v-model="flight.airline" placeholder="例: 長榮" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-primary outline-none">
+                                                </div>
+                                                <div>
+                                                    <label class="text-[10px] font-bold text-gray-400 ml-1">航班編號</label>
+                                                    <input v-model="flight.number" placeholder="BR198" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-primary outline-none uppercase">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-3 mb-3">
+                                            <div class="relative">
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">出發地</label>
+                                                <input v-model="flight.departure" placeholder="TPE" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-primary outline-none uppercase pl-8">
+                                                <i class="fa-solid fa-plane-departure absolute left-3 top-8 text-gray-300 text-xs"></i>
+                                            </div>
+                                            <div class="relative">
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">抵達地</label>
+                                                <input v-model="flight.arrival" placeholder="NRT" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-primary outline-none uppercase pl-8">
+                                                <i class="fa-solid fa-plane-arrival absolute left-3 top-8 text-gray-300 text-xs"></i>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">起飛時間</label>
+                                                <input v-model="flight.departureTime" type="time" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-primary outline-none">
+                                            </div>
+                                            <div>
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">抵達時間</label>
+                                                <input v-model="flight.arrivalTime" type="time" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-primary outline-none">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-50 p-4 rounded-xl border border-orange-100">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <span class="bg-orange-100 text-orange-500 text-xs font-bold px-2 py-1 rounded">回程 (Inbound)</span>
+                                        <button @click="addSegment('Inbound')" class="text-xs flex items-center gap-1 text-orange-500 hover:text-orange-700 font-bold">
+                                            <i class="fa-solid fa-plus"></i> 加入轉機
+                                        </button>
+                                    </div>
+
+                                    <div v-for="(flight, index) in flightInfo.inbound" :key="index" class="relative mb-6 pb-6 border-b border-dashed border-gray-300 last:border-0 last:mb-0 last:pb-0">
+
+                                        <button v-if="flightInfo.inbound.length > 1" @click="removeSegment(flight, flightInfo.inbound, index)" class="absolute -right-2 -top-2 text-gray-300 hover:text-red-400">
+                                            <i class="fa-solid fa-circle-minus"></i>
+                                        </button>
+
+                                        <div class="grid grid-cols-2 gap-3 mb-3">
+                                            <div class="mb-3">
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">日期</label>
+                                                <input v-model="flight.date" type="datetime-local" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-orange-400 outline-none">
+                                            </div>
+
+                                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                                <div>
+                                                    <label class="text-[10px] font-bold text-gray-400 ml-1">航空公司</label>
+                                                    <input v-model="flight.airline" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-orange-400 outline-none">
+                                                </div>
+                                                <div>
+                                                    <label class="text-[10px] font-bold text-gray-400 ml-1">航班編號</label>
+                                                    <input v-model="flight.number" placeholder="BR198" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-orange-400 outline-none uppercase">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-3 mb-3">
+                                            <div class="relative">
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">出發地</label>
+                                                <input v-model="flight.departure" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-orange-400 outline-none uppercase pl-8">
+                                                <i class="fa-solid fa-plane-departure absolute left-3 top-8 text-gray-300 text-xs"></i>
+                                            </div>
+                                            <div class="relative">
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">抵達地</label>
+                                                <input v-model="flight.arrival" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-orange-400 outline-none uppercase pl-8">
+                                                <i class="fa-solid fa-plane-arrival absolute left-3 top-8 text-gray-300 text-xs"></i>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">起飛時間</label>
+                                                <input v-model="flight.departureTime" type="time" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-orange-400 outline-none">
+                                            </div>
+                                            <div>
+                                                <label class="text-[10px] font-bold text-gray-400 ml-1">抵達時間</label>
+                                                <input v-model="flight.arrivalTime" type="time" class="w-full p-2 bg-white rounded-lg border text-sm focus:border-orange-400 outline-none">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <div v-else class="space-y-3">
+                                <div v-for="(flight, idx) in flightInfo.outbound" :key="'out-'+idx" class="flex items-center justify-between">
+                                    <div class="flex flex-col">
+                                        <span class="text-xs text-gray-400">{{ flight.departure || 'DEP' }}</span>
+                                        <span class="font-bold text-lg text-gray-800">{{ flight.departureTime || '--:--' }}</span>
+                                    </div>
+                                    <div class="flex flex-col items-center px-2 w-20">
+                                        <div class="text-[10px] text-gray-400 mb-1">{{ flight.airline }}</div>
+                                        <div class="flex items-center w-full">
+                                            <div class="h-[1px] bg-gray-300 flex-1"></div>
+                                            <i class="fa-solid fa-plane text-primary text-xs mx-1"></i>
+                                            <div class="h-[1px] bg-gray-300 flex-1"></div>
+                                        </div>
+                                        <div v-if="idx < flightInfo.outbound.length - 1" class="text-[9px] text-blue-400 mt-1">轉機</div>
+                                    </div>
+                                    <div class="flex flex-col items-end">
+                                        <span class="text-xs text-gray-400">{{ flight.arrival || 'ARR' }}</span>
+                                        <span class="font-bold text-lg text-gray-800">{{ flight.arrivalTime || '--:--' }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="border-t border-dashed border-gray-200 my-2"></div>
+
+                                <div v-for="(flight, idx) in flightInfo.inbound" :key="'in-'+idx" class="flex items-center justify-between">
+                                    <div class="flex flex-col">
+                                        <span class="text-xs text-gray-400">{{ flight.departure || 'DEP' }}</span>
+                                        <span class="font-bold text-lg text-gray-800">{{ flight.departureTime || '--:--' }}</span>
+                                    </div>
+                                    <div class="flex flex-col items-center px-2 w-20">
+                                        <div class="text-[10px] text-gray-400 mb-1">{{ flight.airline }}</div>
+                                        <div class="flex items-center w-full">
+                                            <div class="h-[1px] bg-gray-300 flex-1"></div>
+                                            <i class="fa-solid fa-plane text-orange-400 text-xs mx-1 rotate-180"></i>
+                                            <div class="h-[1px] bg-gray-300 flex-1"></div>
+                                        </div>
+                                        <div v-if="idx < flightInfo.inbound.length - 1" class="text-[9px] text-orange-400 mt-1">轉機</div>
+                                    </div>
+                                    <div class="flex flex-col items-end">
+                                        <span class="text-xs text-gray-400">{{ flight.arrival || 'ARR' }}</span>
+                                        <span class="font-bold text-lg text-gray-800">{{ flight.arrivalTime || '--:--' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div v-if="currentTab === 'itinerary'">
                         <div class="flex justify-between mb-4">
                             <h2 class="text-xl font-bold">每日行程</h2>
@@ -778,10 +1032,13 @@
                 </div>
 
             </div>
-        </div> <div v-if="showCreateTripModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
+        </div> 
+        <div v-if="showCreateTripModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
             <div class="bg-white w-full max-w-md p-6 rounded-3xl shadow-2xl m-4">
                 <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-bold text-lake-dark">建立新旅程</h3>
+                    <h3 class="text-xl font-bold text-lake-dark">
+                        {{ isEditingTrip ? '編輯旅程' : '建立新旅程' }}
+                    </h3>
                     <button @click="showCreateTripModal=false" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
                 </div>
 
@@ -813,8 +1070,8 @@
                         </div>
                     </div>
 
-                    <button @click="createTrip" class="w-full bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-primary/30 hover:bg-lake-dark transition mt-2">
-                        開始規劃 ✈️
+                    <button @click="submitTripForm" class="w-full bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-primary/30 hover:bg-lake-dark transition mt-4">
+                        {{ isEditingTrip ? '儲存變更' : '開始規劃 ✈️' }}
                     </button>
                 </div>
             </div>

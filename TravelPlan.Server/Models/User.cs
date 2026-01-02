@@ -8,6 +8,7 @@
 
         public string? GoogleId { get; set; }
 
-        public List<Trip> Trips { get; set; } = new List<Trip>();
+        // 參加了哪些群組
+        public List<TravelGroup> Groups { get; set; } = new List<TravelGroup>();
     }
 }

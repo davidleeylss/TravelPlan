@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TravelPlan.Server.Data;
 
@@ -11,9 +12,11 @@ using TravelPlan.Server.Data;
 namespace TravelPlan.Server.Migrations
 {
     [DbContext(typeof(TravelPlanContext))]
-    partial class TravelPlanContextModelSnapshot : ModelSnapshot
+    [Migration("20260102025237_AddTravelGroupEntity")]
+    partial class AddTravelGroupEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,21 +24,6 @@ namespace TravelPlan.Server.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.Entity("TravelGroupUser", b =>
-                {
-                    b.Property<int>("GroupsId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MembersId")
-                        .HasColumnType("int");
-
-                    b.HasKey("GroupsId", "MembersId");
-
-                    b.HasIndex("MembersId");
-
-                    b.ToTable("TravelGroupUser");
-                });
 
             modelBuilder.Entity("TravelPlan.Server.Models.Expense", b =>
                 {
@@ -155,23 +143,6 @@ namespace TravelPlan.Server.Migrations
                     b.ToTable("ItineraryItems");
                 });
 
-            modelBuilder.Entity("TravelPlan.Server.Models.TravelGroup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("GroupName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("TravelGroups");
-                });
-
             modelBuilder.Entity("TravelPlan.Server.Models.Trip", b =>
                 {
                     b.Property<int>("Id")
@@ -193,12 +164,7 @@ namespace TravelPlan.Server.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("TravelGroupId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("TravelGroupId");
 
                     b.ToTable("Trips");
                 });
@@ -227,19 +193,19 @@ namespace TravelPlan.Server.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("TravelGroupUser", b =>
+            modelBuilder.Entity("TripUser", b =>
                 {
-                    b.HasOne("TravelPlan.Server.Models.TravelGroup", null)
-                        .WithMany()
-                        .HasForeignKey("GroupsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<int>("ParticipantsId")
+                        .HasColumnType("int");
 
-                    b.HasOne("TravelPlan.Server.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("MembersId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<int>("TripsId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ParticipantsId", "TripsId");
+
+                    b.HasIndex("TripsId");
+
+                    b.ToTable("TripUser");
                 });
 
             modelBuilder.Entity("TravelPlan.Server.Models.Expense", b =>
@@ -269,18 +235,19 @@ namespace TravelPlan.Server.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("TravelPlan.Server.Models.Trip", b =>
+            modelBuilder.Entity("TripUser", b =>
                 {
-                    b.HasOne("TravelPlan.Server.Models.TravelGroup", "TravelGroup")
-                        .WithMany("Trips")
-                        .HasForeignKey("TravelGroupId");
+                    b.HasOne("TravelPlan.Server.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Navigation("TravelGroup");
-                });
-
-            modelBuilder.Entity("TravelPlan.Server.Models.TravelGroup", b =>
-                {
-                    b.Navigation("Trips");
+                    b.HasOne("TravelPlan.Server.Models.Trip", null)
+                        .WithMany()
+                        .HasForeignKey("TripsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TravelPlan.Server.Models.Trip", b =>

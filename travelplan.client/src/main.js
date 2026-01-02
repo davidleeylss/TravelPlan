@@ -8,7 +8,7 @@ const app = createApp(App)
 
 // 設定 Google Client ID
 app.use(vue3GoogleLogin, {
-    clientId: ''
+    clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID
 })
 
 // 掛載到網頁上

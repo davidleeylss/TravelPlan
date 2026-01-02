@@ -10,8 +10,9 @@
         // 誰創立的
         public int OwnerId { get; set; }
 
-        // 參加人員 (多對多關係，透過 EF Core 自動處理)
-        public List<User> Participants { get; set; } = new List<User>();
+        // 新增: 關聯到 TravelGroup
+        public int? TravelGroupId { get; set; }
+        public TravelGroup? TravelGroup { get; set; }
 
         // 關聯的資料
         public List<ItineraryItem> Itineraries { get; set; }

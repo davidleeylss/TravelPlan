@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TravelPlan.Server.Models
 {
@@ -10,6 +11,7 @@ namespace TravelPlan.Server.Models
         public string ItemName { get; set; } = string.Empty; // 項目名稱 (例如: 拉麵)
 
         [Required]
+        [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; } // 金額
 
         [Required]
